@@ -49,14 +49,16 @@ class CreateNewsForm(forms.Form):
 class UpdateNewsForm(forms.Form):
     update_news_select = forms.ModelChoiceField(
         label="Update News",
-        queryset=NewsListing.objects.all(),
+        queryset=NewsListing.objects.filter(secrecy=1),
         required=False)
     update_news_query   = forms.CharField(label="Update Query", required=False)
     update_news_sources = forms.CharField(label="Update Sources", required=False)
     update_news_secrecy = forms.IntegerField(label="Update Secrecy", required=False)
     
     def __init__(self, *args, **kargs):
-        super().__init__(*args, **kargs)
+        kargscopy = kargs.copy()
+        kargscopy.pop("secrecy")
+        super().__init__(*args, **kargscopy)
         # STUDENT TODO
         # you should change the "queryset" in update_news_select to be None.
         # then, here in the constructor, you can change it to be the filtered
@@ -67,6 +69,11 @@ class UpdateNewsForm(forms.Form):
         #
         # This form is constructed in views.py. Modify this constructor to
         # accept the passed-in (filtered) queryset.
+        if len(kargs) > 0:
+            self.fields["update_news_select"] = forms.ModelChoiceField(
+                label="Update News",
+                queryset=NewsListing.objects.filter(secrecy=kargs["secrecy"]),
+                required=False)
     
     def clean(self):
         cleaned_data = super().clean()

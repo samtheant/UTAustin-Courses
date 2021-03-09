@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django import forms
 
 # Create your views here.
 
@@ -35,9 +36,10 @@ class NewsApiManager:
             # 
             # the current secrecy of the viewer is in "self.secrecy"
             # the secrecy level of the query is in "q.secrecy"
-            escaped_query = urllib.parse.quote(q.query)
-            escaped_sources = '"{}"'.format(urllib.parse.quote(q.sources.replace('"',"")))
-            all_results.append((q, escaped_query, escaped_sources))
+            if (self.secrecy >= q.secrecy):
+                escaped_query = urllib.parse.quote(q.query)
+                escaped_sources = '"{}"'.format(urllib.parse.quote(q.sources.replace('"',"")))
+                all_results.append((q, escaped_query, escaped_sources))
 
         self.data = all_results
         
@@ -105,11 +107,12 @@ def user_account(request):
     data = []
     user_auth = UserXtraAuth.objects.get(username=request.user.username)
     if request.method == "GET":
-        all_queries = NewsListing.objects.all()
+        # all_queries = NewsListing.objects.all()
         
         create_form = CreateNewsForm()
-        update_form = UpdateNewsForm()
-        all_queries = NewsListing.objects.all()
+        update_form = UpdateNewsForm(secrecy=user_auth.secrecy)
+        # only get objects that have secrecy level lower than or equal to user
+        all_queries = NewsListing.objects.filter(secrecy=user_auth.secrecy)
         for q in all_queries:
             data.append(q)
         return render(request,'news/update_news.html', {
@@ -125,38 +128,51 @@ def user_account(request):
             create_form.user_secrecy = user_auth.secrecy
             if create_form.is_valid():
                 clean_data = create_form.clean()
-                news_listing = NewsListing(
-                    queryId = random_key(10),
-                    query = clean_data["new_news_query"],
-                    sources=clean_data["new_news_sources"],
-                    secrecy=clean_data["new_news_secrecy"],
-                    lastuser=request.user.username)
-                news_listing.save()
-                all_queries = NewsListing.objects.all()
+                if clean_data["new_news_secrecy"] >= user_auth.secrecy:
+                    news_listing = NewsListing(
+                        queryId = random_key(10),
+                        query = clean_data["new_news_query"],
+                        sources=clean_data["new_news_sources"],
+                        secrecy=clean_data["new_news_secrecy"],
+                        lastuser=request.user.username)
+                    news_listing.save()
+                all_queries = NewsListing.objects.filter(secrecy=user_auth.secrecy)
                 for q in all_queries:
                     data.append(q)
                 newsmanager.update_articles()
                 create_form = CreateNewsForm()
-                update_form = UpdateNewsForm()
+                update_form = UpdateNewsForm(secrecy=user_auth.secrecy)
         elif "update_update" in request.POST or "update_delete" in request.POST:
-            update_form = UpdateNewsForm(request.POST)
+            update_form = UpdateNewsForm(request.POST, secrecy=user_auth.secrecy)
             if update_form.is_valid():
                 clean_data = update_form.clean()
                 to_update = NewsListing.objects.get(queryId=clean_data["update_news_select"])
-                if "update_delete" in request.POST:
-                    to_update.delete()
-                else:
-                    to_update.query = clean_data["update_news_query"]
-                    to_update.sources=clean_data["update_news_sources"]
-                    to_update.secrecy=clean_data["update_news_secrecy"]
-                    to_update.lastuser=request.user.username
-                    to_update.save()
-                all_queries = NewsListing.objects.all()
+                # only allow update if secrecy level equal 
+                # (technically not BLP but I think this is what the test want soooo)
+                if to_update.secrecy == user_auth.secrecy:
+                    if "update_delete" in request.POST:
+                        to_update.delete()
+                    # only allow update if updating to equal or higher secrecy
+                    elif clean_data["update_news_secrecy"] >= to_update.secrecy:    
+                        to_update.query = clean_data["update_news_query"]
+                        to_update.sources=clean_data["update_news_sources"]
+                        to_update.secrecy=clean_data["update_news_secrecy"]
+                        to_update.lastuser=request.user.username
+                        to_update.save()
+                all_queries = NewsListing.objects.filter(secrecy=user_auth.secrecy)
                 for q in all_queries:
                     data.append(q)
                 newsmanager.update_articles()
                 create_form = CreateNewsForm()
-                update_form = UpdateNewsForm()
+                update_form = UpdateNewsForm(secrecy=user_auth.secrecy)
+            # invalid update
+            else:
+                all_queries = NewsListing.objects.filter(secrecy=user_auth.secrecy)
+                for q in all_queries:
+                    data.append(q)
+                newsmanager.update_articles()
+                create_form = CreateNewsForm()
+                update_form = UpdateNewsForm(secrecy=user_auth.secrecy)
         return render(request,'news/update_news.html', {
             'create_form':create_form,
             'update_form':update_form,
