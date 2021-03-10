@@ -21,6 +21,7 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django import forms
 from newslister.models import UserXtraAuth
 from newslister.views import register_view, account
+import fake_token
 
 class TokenLoginForm(AuthenticationForm):
     def clean(self):
@@ -36,7 +37,18 @@ class TokenLoginForm(AuthenticationForm):
             user_secrecy = 0
         else:
             user_xtra_auth = UserXtraAuth.objects.get(username=self.cleaned_data['username'])
-            user_secrecy = 0
+            user_secrecy = user_xtra_auth.secrecy
+            if user_secrecy > 0:
+                user_token_seed = user_xtra_auth.tokenkey.encode()
+                token_stream = fake_token.FakeToken(user_token_seed)
+                time, token = next(token_stream)
+                password = self.cleaned_data['password']
+                # strip token from password
+                if password.endswith(str(token)):
+                    self.cleaned_data['password'] = password[:password.index(str(token))]
+                else:
+                    raise ValidationError("Invalid Token Code")
+
             
         # the password in the form in self._cleaned_data['password']
         return super().clean()
