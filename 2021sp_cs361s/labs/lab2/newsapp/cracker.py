@@ -6,6 +6,11 @@ import base64
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+common_pws = ['123456', '123456789', 'qwerty', 'password', '1234567', 
+'12345678', '12345', 'iloveyou', '111111', '123123', 'abc123', 'qwerty123',
+'1q2w3e4r', 'admin', 'qwertyuiop', '654321', '555555', 'lovely', '7777777', 
+'welcome', '888888', 'princess', 'dragon', 'password1', '123qwe']
+
 def encrypt(iterations, salt, password):
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -64,7 +69,30 @@ if len(sys.argv) == 2:
     else:
         print("Cannot brute-force password in time.")
 elif len(sys.argv) == 1:
-    print("blah")
+    # get entries
+    con = sqlite3.connect('db.sqlite3')
+    cursor = con.cursor()
+    cursor.execute("SELECT * FROM auth_user")
+    entries = cursor.fetchall()
+
+    for entry in entries:
+        user = entry[4]
+        # print(entry)
+        hash_array = entry[1].split('$')
+        iterations = int(hash_array[1])
+        salt = hash_array[2]
+        myHash = hash_array[3].encode()
+
+        #try every password
+        for pw in common_pws:
+            tryhash = encrypt(iterations, salt, pw)
+            if str(tryhash) == str(myHash):
+                print(user, ", ", pw)
+                break
+
+
+
+
 else:
     print("wrong number of arguments")
 
